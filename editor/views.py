@@ -381,7 +381,7 @@ class EditorView(View):
                     'asset': None
                 },
                 {
-                    'display_name': 'Wings',
+                    'display_name': 'Backpack/Wings',
                     'name_safe': 'wings',
                     'asset_category': 'wings',
                     'bone_instance_id': '>wings_bone',
