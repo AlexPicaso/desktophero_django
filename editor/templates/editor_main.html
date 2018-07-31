@@ -45,7 +45,8 @@
   <div id="navigator_panel">
     <a href="/accounts/logout" class="navigator_button">Logout</a>
     <a class="navigator_button" onclick="showAboutModal();">About</a>
-    <a href="https://github.com/stockto2/desktophero_django/issues/new" target="none" class="navigator_button">Report a Bug</a>
+    <a class="navigator_button" onclick="showFeaturedModal();">Featured</a>
+    <!-- <a href="https://github.com/stockto2/desktophero_django/issues/new" target="none" class="navigator_button">Report a Bug</a> -->
     <a href="/resources/contribute" class="navigator_button">Contribute</a>
     <a href="/editor" class="navigator_button">Editor</a>
   </div>
@@ -195,6 +196,17 @@
   <div class="header">About DesktopHero</div>
   <div class="content">
     {% include "about.html" %}
+  </div>
+  <div class="actions">
+    <div class="ui approve button">OK</div>
+  </div>
+</div>
+
+<div class="ui longer modal" id="featured_modal">
+  <i class="close icon"></i>
+  <div class="header">Featured Characters</div>
+  <div class="content">
+    {% include "featured.html" %}
   </div>
   <div class="actions">
     <div class="ui approve button">OK</div>
@@ -433,6 +445,10 @@
 
   function showAboutModal(){
     $('#about_modal').modal('show');
+  }
+
+  function showFeaturedModal(){
+    $('#featured_modal').modal('show');
   }
 
 </script>
