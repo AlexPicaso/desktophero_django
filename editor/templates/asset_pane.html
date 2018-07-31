@@ -60,13 +60,13 @@
                 <p><b>License: </b>{{ asset.license|safe }}</p>
               </div>
               <div>
-                  <form action='/contribute/publish_asset/' id="form_unpublish_{{ asset.id }}" method="post" class="ui form">
+                  <form id="form_unpublish_{{ asset.id }}" method="post" class="ui form">
                     {% csrf_token %}
                     <input type="hidden" name="asset_id" value="{{ asset.pk }}">
                     <input type="hidden" name="publish" value="no">
                     <input type="submit" value="Unpublish" class="ui button"/>
                   </form>
-                  <form action='/contribute/publish_asset/' id="form_publish_{{ asset.id }}" method="post" class="ui form">
+                  <form id="form_publish_{{ asset.id }}" method="post" class="ui form">
                     {% csrf_token %}
                     <input type="hidden" name="asset_id" value="{{ asset.pk }}">
                     <input type="hidden" name="publish" value="yes">
@@ -123,13 +123,10 @@
 </style>
 
 <script>
-  {% for category in categories %}
-    assetPaneInitialized[category] = false;
-  {% endfor %}
-
   $('form').each(function(){
     $(this).submit(function(e){
       $.post("/resources/contribute/publish_asset/", $(this).serialize(), function(data){
+        console.log("Submitting asset.")
         console.log(data);
         if (data["success"]){
           console.log("Asset published? " + data["published"]);
