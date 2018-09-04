@@ -97,7 +97,10 @@ THREE.STLExporter.prototype = {
 									inverses[2] = mesh.skeleton.boneInverses[ boneIndex2 ];
 									inverses[3] = mesh.skeleton.boneInverses[ boneIndex3 ];
 									
-									
+									// Added as a workaround because we seem to be getting DHC files containing assets with 0 vertices
+									if (mesh.skeleton.bones[ boneIndex0 ] === undefined){
+										continue;
+									}
 									skinMatrices[0] = mesh.skeleton.bones[ boneIndex0 ].matrixWorld;
 									skinMatrices[1] = mesh.skeleton.bones[ boneIndex1 ].matrixWorld;
 									skinMatrices[2] = mesh.skeleton.bones[ boneIndex2 ].matrixWorld;
