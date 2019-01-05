@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Face Editor (Beta)</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        font-family: Monospace;
+        background-color: #f0f0f0;
+        margin: 0px;
+        overflow: hidden;
+      }
+      
+      #randomfacebutton {
+        position: fixed;
+        left: 60px;
+        top: 30px;
+        font-weight: bold;
+      }
+
+      #randomposebutton {
+        left: 30px;
+        top: 70px;
+        position: fixed;
+        font-weight: bold;
+      }
+
+      input {
+        width: 200px;
+        margin: 0px 10px 0px 10px;
+      }
+
+      .big {
+        font-size: 20px;
+      }
+
+      #sidebar {
+        width: 400px;
+        text-align: center;
+        position: absolute;
+        height: 100%;
+        top: 0px;
+        right: 0px;
+        overflow-y: scroll;
+      }
+
+      #morpherdiv {
+
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas"></div>
+    <div id="sidebar">
+      <div><button id="randomfacebutton" class="big" onclick="randomMorph();">Random Face</button></div>
+      <div><button id="randomposebutton" class="big" onclick="randomPose();">Random Expression</button></div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://threejs.org/examples/../build/three.js"></script>
+    <script src="https://threejs.org/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+
+      var container;
+      var camera, scene, projector, renderer;
+      var mesh, mixer;
+
+      init();
+      animate();
+
+      function randomMorph() {
+        let morpherNames = Object.keys(mesh.morphers);
+        for (var ii = 0; ii < morpherNames.length; ii++) {
+          mesh.morph(morpherNames[ii], Math.random());
+        }
+      }
+
+      function randomPose() {
+        let morpherNames = Object.keys(mesh.poseMorphers);
+        for (var ii = 0; ii < morpherNames.length; ii++) {
+          mesh.poseMorph(morpherNames[ii], Math.random());
+          // mesh.poseMorph(morpherNames[ii], Math.random(), 'right');
+        }
+      }
+
+      function initMorphTargets(mesh) {
+        mesh.origPositions = mesh.geometry.attributes.position.array.slice(); //copy vertex positions
+        mesh.origNormals = mesh.geometry.attributes.normal.array.slice(); //copy vertex positions
+
+        let targets = JSON.parse(mesh.userData['morph_targets']);
+        mesh.morphTargets = {};
+        for (var ii = 0; ii < targets.length; ii++) {
+          mesh.morphTargets[targets[ii]] = ii;
+        }
+
+        mesh.morphers = JSON.parse(mesh.userData['morphers']);
+        mesh.poseMorphers = JSON.parse(mesh.userData['pose_morphers']);
+
+        THREE.Mesh.prototype.computeMorphTargets = function () {
+          var positions = this.geometry.attributes.position;
+          var normals = this.geometry.attributes.normal;
+          var morphPositions = this.geometry.morphAttributes.position;
+          var morphNormals = this.geometry.morphAttributes.normal;
+
+          var xIndex, yIndex, zIndex;
+          var origVertX, origVertY, origVertZ;
+          var targetVertX, targetVertY, targetVertZ;
+          var origNormalX, origNormalY, origNormalZ;
+          var targetNormalX, targetNormalY, targetNormalZ;
+
+          for (var ii = 0; ii < positions.count; ii++) {
+            xIndex = ii * 3;
+            yIndex = ii * 3 + 1;
+            zIndex = ii * 3 + 2;
+
+            origVertX = this.origPositions[xIndex];
+            origVertY = this.origPositions[yIndex];
+            origVertZ = this.origPositions[zIndex];
+            positions.array[xIndex] = origVertX;
+            positions.array[yIndex] = origVertY;
+            positions.array[zIndex] = origVertZ;
+
+            origNormalX = this.origNormals[xIndex];
+            origNormalY = this.origNormals[yIndex];
+            origNormalZ = this.origNormals[zIndex];
+            normals.array[xIndex] = origNormalX;
+            normals.array[yIndex] = origNormalY;
+            normals.array[zIndex] = origNormalZ;
+
+            for (var jj = 0; jj < morphPositions.length; jj++) {
+              targetVertX = morphPositions[jj].array[xIndex];
+              targetVertY = morphPositions[jj].array[yIndex];
+              targetVertZ = morphPositions[jj].array[zIndex];
+              positions.array[xIndex] += (targetVertX - origVertX) * this.morphTargetEffects[jj];
+              positions.array[yIndex] += (targetVertY - origVertY) * this.morphTargetEffects[jj];
+              positions.array[zIndex] += (targetVertZ - origVertZ) * this.morphTargetEffects[jj];
+
+              targetNormalX = morphNormals[jj].array[xIndex];
+              targetNormalY = morphNormals[jj].array[yIndex];
+              targetNormalZ = morphNormals[jj].array[zIndex];
+              normals.array[xIndex] += (targetNormalX - origNormalX) * this.morphTargetEffects[jj];
+              normals.array[yIndex] += (targetNormalY - origNormalY) * this.morphTargetEffects[jj];
+              normals.array[zIndex] += (targetNormalZ - origNormalZ) * this.morphTargetEffects[jj];
+            }
+          }
+
+          this.geometry.attributes.position.needsUpdate = true;
+        };
+
+        mesh.morph = function(morpherName, value) {
+          let morpher = this.morphers[morpherName];
+          if (morpher.morphTargets.length == 2) {
+            // input value is between 0 and 1, map this value between two shape keys
+            // left target
+            let leftTargetName = morpher.morphTargets[0];
+            let leftTargetIdx = this.morphTargets[leftTargetName];
+            // right target
+            let rightTargetName = morpher.morphTargets[1];
+            let rightTargetIdx = this.morphTargets[rightTargetName];
+            if (value < .5) { // left side morph target
+              this.morphTargetEffects[leftTargetIdx] = 1 - (value * 2);
+              this.morphTargetEffects[rightTargetIdx] = 0;
+            } else if (value > .5) { // right side morph target
+              this.morphTargetEffects[leftTargetIdx] = 0;
+              this.morphTargetEffects[rightTargetIdx] = (value - .5) * 2;
+            } else { // equal, use neither morph target
+              this.morphTargetEffects[leftTargetIdx] = 0;
+              this.morphTargetEffects[rightTargetIdx] = 0;
+            }
+          } else { // only one morph target, simply set value
+            let targetName = morpher.morphTargets[0];
+            let morphTargetIdx = this.morphTargets[targetName];
+            this.morphTargetEffects[morphTargetIdx] = value;
+          }
+          this.computeMorphTargets();
+        };
+
+        mesh.poseMorph = function(morpherName, value, side='both') {
+          let morpher = this.poseMorphers[morpherName];
+          var sides = [];
+          if (morpher.doubleSided) {
+            if (side == 'left' || side == 'both') {
+              sides.push(' left');
+            }
+            if (side == 'right' || side == 'both') {
+              sides.push(' right');
+            }
+          } else { // doesn't support left and right sides
+            sides.push('');
+          }
+
+          for (var ii = 0; ii < sides.length; ii++) {
+            if (morpher.morphTargets.length == 2) {
+              // input value is between 0 and 1, map this value between two shape keys
+              // left target
+              let leftTargetName = morpher.morphTargets[0] + sides[ii];
+              let leftTargetIdx = this.morphTargets[leftTargetName];
+              // right target
+              let rightTargetName = morpher.morphTargets[1] + sides[ii];
+              let rightTargetIdx = this.morphTargets[rightTargetName];
+              if (value < .5) { // left side morph target
+                this.morphTargetEffects[leftTargetIdx] = 1 - (value * 2);
+                this.morphTargetEffects[rightTargetIdx] = 0;
+              } else if (value > .5) { // right side morph target
+                this.morphTargetEffects[leftTargetIdx] = 0;
+                this.morphTargetEffects[rightTargetIdx] = (value - .5) * 2;
+              } else { // equal, use neither morph target
+                this.morphTargetEffects[leftTargetIdx] = 0;
+                this.morphTargetEffects[rightTargetIdx] = 0;
+              }
+            } else { // only one morph target, simply set value
+              let targetName = morpher.morphTargets[0] + sides[ii];
+              let morphTargetIdx = this.morphTargets[targetName];
+              this.morphTargetEffects[morphTargetIdx] = value;
+            }
+            this.computeMorphTargets();
+          }
+        };
+
+
+        let morpherNames = Object.keys(mesh.morphers);
+        let poseMorpherNames = Object.keys(mesh.poseMorphers);
+        mesh.morphTargetEffects = [];
+        for (var ii = 0; ii < morpherNames.length + poseMorpherNames.length; ii++) {
+          mesh.morphTargetEffects.push(0);
+        }
+
+        // Set morphs and poses to initial values
+        for (var ii = 0; ii < morpherNames.length; ii++) {
+          let morpherName = morpherNames[ii];
+          let morpher = mesh.morphers[morpherName];
+          mesh.morph(morpherName, morpher.initialValue);
+        }
+        for (var ii = 0; ii < poseMorpherNames.length; ii++) {
+          let morpherName = poseMorpherNames[ii];
+          let morpher = mesh.poseMorphers[morpherName];
+          mesh.poseMorph(morpherName, morpher.initialValue);
+        }
+      }
+
+      function addSlider(morpherName, morpher, leftCallback, rightCallback) {
+        let container = $('#sidebar');
+        let morpherDiv = $('<div>');
+        morpherDiv.addClass('morpherdiv');
+        morpherDiv.append($('<h2>' + morpherName + '</h2>'));
+        let sliderDiv = $('<div>');
+        let slider = $('<input type="range" min="0" max="1" value="' + morpher.initialValue + '" step=".02">');
+        slider.on('input', leftCallback.bind(this, morpherName, morpher));
+        sliderDiv.append('<span>' + morpher.leftName + '</span>');
+        sliderDiv.append(slider);
+        sliderDiv.append('<span>' + morpher.rightName + '</span>');
+        morpherDiv.append(sliderDiv);
+
+        if (morpher.doubleSided) {
+          sliderDiv.prepend('<span><b>Left: </b></span');
+
+          let sliderDiv2 = $('<div>');
+          let slider2 = $('<input type="range" min="0" max="1" value="' + morpher.initialValue + '" step=".02">');
+          slider2.on('input', rightCallback.bind(this, morpherName, morpher));
+          sliderDiv2.append('<span><b>Right: </b></span');
+          sliderDiv2.append('<span>' + morpher.leftName + '</span>');
+          sliderDiv2.append(slider2);
+          sliderDiv2.append('<span>' + morpher.rightName + '</span>');
+          morpherDiv.append(sliderDiv2);
+        }
+
+        container.append(morpherDiv);
+      }
+
+      function initSliders() {
+        // Set morphs and poses to initial values
+        let morpherNames = Object.keys(mesh.morphers);
+        for (var ii = 0; ii < morpherNames.length; ii++) {
+          let morpherName = morpherNames[ii];
+          let morpher = mesh.morphers[morpherName];
+          addSlider(morpherName, morpher, function(morpherName, morpher, inputEvent) {
+            let value = inputEvent.currentTarget.value;
+            // console.log(morpherName + ': ' + value);
+            mesh.morph(morpherName, value);
+          });
+        }
+        morpherNames = Object.keys(mesh.poseMorphers);
+        for (var ii = 0; ii < morpherNames.length; ii++) {
+          let morpherName = morpherNames[ii];
+          let morpher = mesh.poseMorphers[morpherName];
+          let leftMorphFn = function(morpherName, morpher, inputEvent) {
+            let value = inputEvent.currentTarget.value;
+            // console.log(morpherName + ': ' + value);
+            mesh.poseMorph(morpherName, value, 'left');
+
+            if (!morpher.doubleSided) {
+              mesh.poseMorph(morpherName, value, 'right');
+            }
+          }
+          let rightMorphFn = function(morpherName, morpher, inputEvent) {
+            let value = inputEvent.currentTarget.value;
+            mesh.poseMorph(morpherName, value, 'right');
+          }
+
+          addSlider(morpherName, morpher, leftMorphFn, rightMorphFn);
+        }
+      }
+
+      function init() {
+
+        container = document.getElementById( 'canvas' );
+
+        // camera = new THREE.OrthographicCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 ); 
+        camera = new THREE.OrthographicCamera( window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, -10000, 10000 );
+        camera.position.set( -13, -3, 44 );
+        camera.zoom = 25;
+        camera.updateProjectionMatrix();
+
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color( 0xf0f0f0 );
+
+        var light = new THREE.DirectionalLight( 0xefefff, 3 );
+        light.position.set( 1, 1, 1 ).normalize();
+        scene.add( light );
+
+        var light = new THREE.DirectionalLight( 0xffefef, 2.5 );
+        light.position.set( -1, -1, -1 ).normalize();
+        scene.add( light );
+
+        var light = new THREE.AmbientLight( 0x606060 ); // soft white light
+        scene.add( light );
+
+        var loader = new THREE.GLTFLoader();
+        loader.load( "https://s3-us-west-1.amazonaws.com/desktophero/beta/head.glb", function( gltf ) {
+          window.gltf = gltf;
+          mesh = gltf.scene.children[ 0 ];
+          mesh.position.set(0, 3, 0);
+          mesh.scale.set( 1, 1, 1 );
+          scene.add( mesh );
+          initMorphTargets(mesh);
+          initSliders();
+        } );
+
+        renderer = new THREE.WebGLRenderer();
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.setClearColor(0x000000);
+        container.appendChild(renderer.domElement);
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        var controls = new THREE.OrbitControls(camera, renderer.domElement);
+      }
+
+      function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+      }
+
+      function animate() {
+
+        requestAnimationFrame( animate );
+
+        renderer.render( scene, camera );
+
+      }
+
+    </script>
+
+  </body>
+</html>

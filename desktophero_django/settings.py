@@ -21,6 +21,9 @@ with open(os.path.join(BASE_DIR, 'desktophero_django','secrets.txt')) as infile:
     aws_access_key_id = lines[3]
     aws_secret_access_key = lines[5]
 
+with open(os.path.join(BASE_DIR, 'desktophero_django','betausers.txt')) as infile:
+    BETA_USERS = [line.lower() for line in infile.read().split('\n') if line]
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.11/howto/deployment/checklist/
 
@@ -44,7 +47,8 @@ INSTALLED_APPS = [
     'storages',
     'resources',
     'editor',
-    'django.contrib.admin'
+    'head',
+    'django.contrib.admin',
 ]
 
 MIDDLEWARE = [

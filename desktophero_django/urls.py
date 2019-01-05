@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.contrib.auth import views as auth_views
 from editor.views import RegistrationView, TermsOfServiceView, PrivacyPolicyView
+from head.views import head_view
 
 urlpatterns = [
 	url(r'^', include('editor.urls')),
@@ -16,4 +17,5 @@ urlpatterns = [
 
     url(r'^terms_of_service/', TermsOfServiceView.as_view(), name='terms_of_service'),
     url(r'^privacy_policy/', PrivacyPolicyView.as_view(), name='privacy_policy'),
+    url(r'^beta/', head_view, name='beta'),
 ]
